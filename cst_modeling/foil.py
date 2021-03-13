@@ -433,21 +433,7 @@ def cst_foil(nn, coef_upp, coef_low, x=None, t=None, tail=0.0):
     x_, yu = cst_curve(nn, coef_upp, x=x)
     x_, yl = cst_curve(nn, coef_low, x=x)
     
-    thick = yu-yl
-    it = np.argmax(thick)
-    t0 = thick[it]
-
-    # Apply thickness constraint
-    if t is not None:
-        r  = (t-tail*x_[it])/t0
-        t0 = t
-        yu = yu * r
-        yl = yl * r
-
-    # Add tail
-    for i in range(nn):
-        yu[i] += 0.5*tail*x_[i]
-        yl[i] -= 0.5*tail*x_[i]
+    yu, yl, t_max= set_t_tail(x_, yu, x_, yl, tail, t_max=t)
 
     # Calculate leading edge radius
     x_RLE = 0.005
@@ -455,7 +441,44 @@ def cst_foil(nn, coef_upp, coef_low, x=None, t=None, tail=0.0):
     yl_RLE = interplot_from_curve(x_RLE, x_, yl)
     R0, _ = find_circle_3p([0.0,0.0], [x_RLE,yu_RLE], [x_RLE,yl_RLE])
 
-    return x_, yu, yl, t0, R0
+    return x_, yu, yl, t_max, R0
+
+def set_t_tail(xu_, yu_, xl_, yl_, t_tail, t_max = None):
+    xu = np.array(xu_)
+    yu = np.array(yu_)
+    xl = np.array(xl_)
+    yl = np.array(yl_)
+    
+    
+    # yu = copy.deepcopy(yu_)
+    # yl = copy.deepcopy(yl_)
+
+    # if need to set thick to a specific number, xu and xl should be aligned
+    # otherwise only need to align the tail point([-1])
+    if t_max is not None:
+        thick = yu - yl
+        t_max_idx = np.argmax(thick)
+        t_max_0 = thick[t_max_idx]
+    
+    if abs(xu[-1] - xl[-1]) > 1e-3:
+        raise Exception("xu and xl not aligned")
+
+    t_tail_0 = yu[-1] - yl[-1]
+    
+    print(f'T_tail {t_tail_0} -> {t_tail}')
+
+    # Apply thickness constraint
+    if t_max is not None:
+        ratio  = (t_max - (t_tail - t_tail_0) * xu[t_max_idx]) / t_max_0
+        yu = yu * ratio
+        yl = yl * ratio
+
+    # Add tail
+    yu += 0.5 * (t_tail - t_tail_0) * xu
+    yl -= 0.5 * (t_tail - t_tail_0) * xl
+    
+    return yu, yl, t_max
+
 
 def cst_foil_fit(xu, yu, xl, yl, n_order=7):
     '''
